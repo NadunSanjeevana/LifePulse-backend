@@ -2,7 +2,6 @@ const Task = require("../models/Task");
 
 exports.createTask = async (req, res) => {
   try {
-    console.log(req.body);
     const { userId, task, timeFrom, timeTo, date, category } = req.body;
 
     const [timeFromHour, timeFromMinute] = timeFrom.split(":").map(Number);
@@ -47,6 +46,42 @@ exports.getTasks = async (req, res) => {
       },
     });
     res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const getHours = (from, to) => {
+  const fromTime = new Date(from);
+  const toTime = new Date(to);
+  return (toTime - fromTime) / 3600000; // Convert milliseconds to hours
+};
+
+exports.getWeeklyWorkLeisureSummary = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const tasks = await Task.find({
+      date: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      },
+    });
+
+    const summary = tasks.reduce((acc, task) => {
+      const day = new Date(task.date).toLocaleDateString("en-US", {
+        weekday: "short",
+      });
+      const hours = getHours(task.timeFrom, task.timeTo);
+
+      if (!acc[day]) {
+        acc[day] = { Work: 0, Leisure: 0, Sleep: 0, Other: 0 };
+      }
+      acc[day][task.category] += hours;
+      return acc;
+    }, {});
+
+    res.json(summary);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
