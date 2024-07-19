@@ -1,4 +1,6 @@
 const Task = require("../models/Task");
+const fs = require("fs");
+const ical = require("ical");
 
 exports.createTask = async (req, res) => {
   try {
@@ -84,5 +86,40 @@ exports.getWeeklyWorkLeisureSummary = async (req, res) => {
     res.json(summary);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+exports.importCalendarEvents = async (req, res) => {
+  try {
+    const filePath = req.file.path;
+    const data = fs.readFileSync(filePath, "utf8");
+    const parsedData = ical.parseICS(data);
+
+    const events = [];
+    for (const key in parsedData) {
+      if (parsedData.hasOwnProperty(key)) {
+        const event = parsedData[key];
+        if (event.type === "VEVENT") {
+          const newTask = new Task({
+            description: event.summary,
+            timeFrom: event.start,
+            timeTo: event.end,
+            date: event.start,
+            category: "Other", // Default category, you might want to adjust this based on event properties
+            userId: req.userId, // Ensure userId is passed or derived from authentication
+          });
+          await newTask.save();
+          events.push(newTask);
+        }
+      }
+    }
+
+    // Remove the uploaded file after parsing
+    fs.unlinkSync(filePath);
+
+    res.status(200).json(events);
+  } catch (error) {
+    console.error("Failed to import calendar events:", error);
+    res.status(500).json({ message: "Failed to import calendar events" });
   }
 };
