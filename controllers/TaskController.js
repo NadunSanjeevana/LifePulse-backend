@@ -2,6 +2,8 @@ const Task = require("../models/Task");
 const fs = require("fs");
 const ical = require("ical");
 
+const Task = require("../models/Task"); // Adjust the path to your Task model
+
 exports.createTask = async (req, res) => {
   try {
     const { userId, task, timeFrom, timeTo, date, category } = req.body;
@@ -9,7 +11,7 @@ exports.createTask = async (req, res) => {
     const [timeFromHour, timeFromMinute] = timeFrom.split(":").map(Number);
     const [timeToHour, timeToMinute] = timeTo.split(":").map(Number);
 
-    const taskDate = new Date(date); // Use the provided date
+    const taskDate = new Date(date);
     const timeFromDate = new Date(
       taskDate.setHours(timeFromHour, timeFromMinute)
     ).toISOString();
@@ -17,13 +19,31 @@ exports.createTask = async (req, res) => {
       taskDate.setHours(timeToHour, timeToMinute)
     ).toISOString();
 
+    // Check for overlapping tasks
+    const overlappingTask = await Task.findOne({
+      userId,
+      date: new Date(date),
+      $or: [
+        {
+          timeFrom: { $lt: timeToDate },
+          timeTo: { $gt: timeFromDate },
+        },
+      ],
+    });
+
+    if (overlappingTask) {
+      return res
+        .status(400)
+        .json({ message: "There is already a task for the same time slot." });
+    }
+
     const newTask = new Task({
       userId,
       description: task,
       timeFrom: timeFromDate,
       timeTo: timeToDate,
-      date: new Date(date), // Set the task date
-      category, // Set the task category
+      date: new Date(date),
+      category,
     });
 
     await newTask.save();
