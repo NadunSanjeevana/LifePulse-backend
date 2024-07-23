@@ -2,8 +2,6 @@ const Task = require("../models/Task");
 const fs = require("fs");
 const ical = require("ical");
 
-const Task = require("../models/Task"); // Adjust the path to your Task model
-
 exports.createTask = async (req, res) => {
   try {
     const { userId, task, timeFrom, timeTo, date, category } = req.body;
