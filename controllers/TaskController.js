@@ -84,10 +84,8 @@ exports.getWeeklyWorkLeisureSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const userId = req.user._id; // Ensure userId is passed from authenticated user
-    console.log(userId);
     const from = new Date(startDate);
     const to = new Date(endDate);
-    console.log(from, to);
     const tasks = await Task.find({
       userId, // Filter by userId
       date: {
@@ -95,7 +93,6 @@ exports.getWeeklyWorkLeisureSummary = async (req, res) => {
         $lte: to.toISOString(),
       },
     });
-    console.log(tasks);
     const summary = tasks.reduce((acc, task) => {
       const day = new Date(task.date).toLocaleDateString("en-US", {
         weekday: "short",
@@ -108,7 +105,6 @@ exports.getWeeklyWorkLeisureSummary = async (req, res) => {
       acc[day][task.category] += hours;
       return acc;
     }, {});
-    console.log("summary", summary);
     res.json(summary);
   } catch (err) {
     res.status(500).json({ message: err.message });
