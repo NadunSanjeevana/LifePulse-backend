@@ -1,10 +1,12 @@
 const Task = require("../models/Task");
 const fs = require("fs");
 const ical = require("ical");
+const checkOverlappingTask = require("../utils/checkOverlappingTask");
 
 exports.createTask = async (req, res) => {
   try {
-    const { userId, task, timeFrom, timeTo, date, category } = req.body;
+    const { task, timeFrom, timeTo, date, category } = req.body;
+    const userId = req.user._id;
 
     const [timeFromHour, timeFromMinute] = timeFrom.split(":").map(Number);
     const [timeToHour, timeToMinute] = timeTo.split(":").map(Number);
@@ -17,17 +19,11 @@ exports.createTask = async (req, res) => {
       taskDate.setHours(timeToHour, timeToMinute)
     ).toISOString();
 
-    // Check for overlapping tasks
-    const overlappingTask = await Task.findOne({
+    const overlappingTask = await checkOverlappingTask(
       userId,
-      date: new Date(date),
-      $or: [
-        {
-          timeFrom: { $lt: timeToDate },
-          timeTo: { $gt: timeFromDate },
-        },
-      ],
-    });
+      timeFromDate,
+      timeToDate
+    );
 
     if (overlappingTask) {
       return res
@@ -54,12 +50,14 @@ exports.createTask = async (req, res) => {
 exports.getTasks = async (req, res) => {
   try {
     const { date } = req.query;
-    console.log(date);
+    const userId = req.user._id; // Ensure userId is passed from authenticated user
+
     const startDate = new Date(date);
     const endDate = new Date(date);
     endDate.setDate(endDate.getDate() + 1);
 
     const tasks = await Task.find({
+      userId, // Filter by userId
       timeFrom: {
         $gte: startDate.toISOString(),
         $lt: endDate.toISOString(),
@@ -80,14 +78,16 @@ const getHours = (from, to) => {
 exports.getWeeklyWorkLeisureSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-
+    const userId = req.user._id; // Ensure userId is passed from authenticated user
+    const from = new Date(startDate);
+    const to = new Date(endDate);
     const tasks = await Task.find({
+      userId, // Filter by userId
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: from.toISOString(),
+        $lte: to.toISOString(),
       },
     });
-
     const summary = tasks.reduce((acc, task) => {
       const day = new Date(task.date).toLocaleDateString("en-US", {
         weekday: "short",
@@ -100,7 +100,6 @@ exports.getWeeklyWorkLeisureSummary = async (req, res) => {
       acc[day][task.category] += hours;
       return acc;
     }, {});
-
     res.json(summary);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -118,16 +117,11 @@ exports.importCalendarEvents = async (req, res) => {
       if (parsedData.hasOwnProperty(key)) {
         const event = parsedData[key];
         if (event.type === "VEVENT") {
-          const newTask = new Task({
-            description: event.summary,
-            timeFrom: event.start,
-            timeTo: event.end,
-            date: event.start,
-            category: "Other", // Default category, you might want to adjust this based on event properties
-            userId: req.userId, // Ensure userId is passed or derived from authentication
+          events.push({
+            summary: event.summary,
+            start: event.start,
+            end: event.end,
           });
-          await newTask.save();
-          events.push(newTask);
         }
       }
     }
@@ -139,5 +133,63 @@ exports.importCalendarEvents = async (req, res) => {
   } catch (error) {
     console.error("Failed to import calendar events:", error);
     res.status(500).json({ message: "Failed to import calendar events" });
+  }
+};
+
+exports.saveSelectedEvents = async (req, res) => {
+  try {
+    const { events } = req.body;
+    const userId = req.user._id;
+    const savedEvents = [];
+
+    for (const event of events) {
+      const overlappingTask = await checkOverlappingTask(
+        userId,
+        event.start,
+        event.end
+      );
+
+      if (overlappingTask) {
+        console.warn(`Skipping event '${event.summary}' due to overlap`);
+        continue; // Skip overlapping events
+      }
+
+      const newTask = new Task({
+        description: event.summary,
+        timeFrom: event.start,
+        timeTo: event.end,
+        date: event.start,
+        category: event.category || "Other",
+        userId,
+      });
+      const savedEvent = await newTask.save();
+      savedEvents.push(savedEvent);
+    }
+
+    res.status(200).json(savedEvents);
+  } catch (error) {
+    console.error("Failed to save selected events:", error);
+    res.status(500).json({ message: "Failed to save selected events" });
+  }
+};
+
+exports.deleteTask = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const userId = req.user._id; // Ensure userId is passed from authenticated user
+
+    // Find the task by taskId and userId
+    const task = await Task.findOne({ _id: taskId, userId });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Delete the task
+    await task.remove();
+
+    res.json({ message: "Task deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
