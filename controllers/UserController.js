@@ -30,7 +30,6 @@ exports.registerUser = async (req, res) => {
 
 // Login a user
 exports.loginUser = async (req, res) => {
-  console.log(req.body);
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
@@ -47,7 +46,7 @@ exports.loginUser = async (req, res) => {
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
-    res.json({ token, userName: user.name });
+    res.json({ token, userName: user.name, profileImage: user.profileImage });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
