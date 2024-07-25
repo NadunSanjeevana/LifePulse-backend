@@ -7,6 +7,7 @@ const {
   getTasks,
   getWeeklyWorkLeisureSummary,
   importCalendarEvents,
+  saveSelectedEvents,
 } = require("../controllers/TaskController");
 
 router.post("/addTasks", authMiddleware, createTask);
@@ -18,5 +19,6 @@ router.post(
   upload.single("file"),
   importCalendarEvents
 );
+router.post("/save-events", authMiddleware, saveSelectedEvents);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const Task = require("../models/Task");
 const fs = require("fs");
 const ical = require("ical");
+const checkOverlappingTask = require("../utils/checkOverlappingTask");
 
 exports.createTask = async (req, res) => {
   try {
@@ -18,17 +19,11 @@ exports.createTask = async (req, res) => {
       taskDate.setHours(timeToHour, timeToMinute)
     ).toISOString();
 
-    // Check for overlapping tasks
-    const overlappingTask = await Task.findOne({
+    const overlappingTask = await checkOverlappingTask(
       userId,
-      date: new Date(date),
-      $or: [
-        {
-          timeFrom: { $lt: timeToDate },
-          timeTo: { $gt: timeFromDate },
-        },
-      ],
-    });
+      timeFromDate,
+      timeToDate
+    );
 
     if (overlappingTask) {
       return res
@@ -122,16 +117,11 @@ exports.importCalendarEvents = async (req, res) => {
       if (parsedData.hasOwnProperty(key)) {
         const event = parsedData[key];
         if (event.type === "VEVENT") {
-          const newTask = new Task({
-            description: event.summary,
-            timeFrom: event.start,
-            timeTo: event.end,
-            date: event.start,
-            category: "Other", // Default category, you might want to adjust this based on event properties
-            userId: req.user._id, // Ensure userId is passed or derived from authentication
+          events.push({
+            summary: event.summary,
+            start: event.start,
+            end: event.end,
           });
-          await newTask.save();
-          events.push(newTask);
         }
       }
     }
@@ -143,6 +133,43 @@ exports.importCalendarEvents = async (req, res) => {
   } catch (error) {
     console.error("Failed to import calendar events:", error);
     res.status(500).json({ message: "Failed to import calendar events" });
+  }
+};
+
+exports.saveSelectedEvents = async (req, res) => {
+  try {
+    const { events } = req.body;
+    const userId = req.user._id;
+    const savedEvents = [];
+
+    for (const event of events) {
+      const overlappingTask = await checkOverlappingTask(
+        userId,
+        event.start,
+        event.end
+      );
+
+      if (overlappingTask) {
+        console.warn(`Skipping event '${event.summary}' due to overlap`);
+        continue; // Skip overlapping events
+      }
+
+      const newTask = new Task({
+        description: event.summary,
+        timeFrom: event.start,
+        timeTo: event.end,
+        date: event.start,
+        category: event.category || "Other",
+        userId,
+      });
+      const savedEvent = await newTask.save();
+      savedEvents.push(savedEvent);
+    }
+
+    res.status(200).json(savedEvents);
+  } catch (error) {
+    console.error("Failed to save selected events:", error);
+    res.status(500).json({ message: "Failed to save selected events" });
   }
 };
 
