@@ -8,6 +8,7 @@ const {
   getWeeklyWorkLeisureSummary,
   importCalendarEvents,
   saveSelectedEvents,
+  deleteTask,
 } = require("../controllers/TaskController");
 
 router.post("/addTasks", authMiddleware, createTask);
@@ -20,5 +21,6 @@ router.post(
   importCalendarEvents
 );
 router.post("/save-events", authMiddleware, saveSelectedEvents);
+router.delete("/:taskId", authMiddleware, deleteTask);
 
 module.exports = router;

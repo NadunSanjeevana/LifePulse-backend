@@ -6,6 +6,7 @@ require("dotenv").config();
 
 const taskRoutes = require("./routes/taskRoutes");
 const userRoutes = require("./routes/userRoutes");
+const chatbotRoutes = require("./routes/chatbot");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +17,7 @@ app.use(cors()); // Enable CORS
 // Routes
 app.use("/api/tasks", taskRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/chatbot", chatbotRoutes);
 
 // Database connection
 mongoose
